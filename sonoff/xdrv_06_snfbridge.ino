@@ -21,6 +21,8 @@
   Sonoff RF Bridge 433
 \*********************************************************************************************/
 
+#define XDRV_06                   6
+
 #define SFB_TIME_AVOID_DUPLICATE  2000  // Milliseconds
 
 enum SonoffBridgeCommands {
@@ -199,21 +201,6 @@ uint8_t SnfBrUpdateInit()
 
 /********************************************************************************************/
 
-void SonoffBridgeSendRaw(char *codes, int size)
-{
-  char *p;
-  char stemp[3];
-  uint8_t code;
-
-  while (size > 0) {
-    snprintf(stemp, sizeof(stemp), codes);
-    code = strtol(stemp, &p, 16);
-    Serial.write(code);
-    size -= 2;
-    codes += 2;
-  }
-}
-
 void SonoffBridgeReceivedRaw()
 {
   // Decoding according to https://github.com/Portisch/RF-Bridge-EFM8BB1
@@ -252,6 +239,7 @@ void SonoffBridgeReceived()
   uint16_t high_time = 0;
   uint32_t received_id = 0;
   char rfkey[8];
+  char stemp[16];
 
   AddLogSerial(LOG_LEVEL_DEBUG);
 
@@ -295,12 +283,13 @@ void SonoffBridgeReceived()
             }
           }
         }
-        if(Settings.flag.rf_receive_dec == 1){
-          snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("{\"" D_JSON_RFRECEIVED "\":{\"" D_JSON_SYNC "\":%d,\"" D_JSON_LOW "\":%d,\"" D_JSON_HIGH "\":%d,\"" D_JSON_DATA "\":%d,\"" D_CMND_RFKEY "\":%s}}"), sync_time, low_time, high_time, received_id, rfkey);
+        if (Settings.flag.rf_receive_decimal) {
+          snprintf_P(stemp, sizeof(stemp), PSTR("%u"), received_id);
+        } else {
+          snprintf_P(stemp, sizeof(stemp), PSTR("\"%06X\""), received_id);
         }
-        else if(Settings.flag.rf_receive_dec == 0){
-          snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("{\"" D_JSON_RFRECEIVED "\":{\"" D_JSON_SYNC "\":%d,\"" D_JSON_LOW "\":%d,\"" D_JSON_HIGH "\":%d,\"" D_JSON_DATA "\":\"%06X\",\"" D_CMND_RFKEY "\":%s}}"), sync_time, low_time, high_time, received_id, rfkey);
-        }
+        snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("{\"" D_JSON_RFRECEIVED "\":{\"" D_JSON_SYNC "\":%d,\"" D_JSON_LOW "\":%d,\"" D_JSON_HIGH "\":%d,\"" D_JSON_DATA "\":%s,\"" D_CMND_RFKEY "\":%s}}"),
+          sync_time, low_time, high_time, stemp, rfkey);
         MqttPublishPrefixTopic_P(RESULT_OR_TELE, PSTR(D_JSON_RFRECEIVED));
         XdrvRulesProcess();
   #ifdef USE_DOMOTICZ
@@ -314,13 +303,20 @@ void SonoffBridgeReceived()
 boolean SonoffBridgeSerialInput()
 {
   // iTead Rf Universal Transceiver Module Serial Protocol Version 1.0 (20170420)
+  static int8_t receive_len = 0;
+
   if (sonoff_bridge_receive_flag) {
     if (sonoff_bridge_receive_raw_flag) {
       if (!serial_in_byte_counter) {
         serial_in_buffer[serial_in_byte_counter++] = 0xAA;
       }
       serial_in_buffer[serial_in_byte_counter++] = serial_in_byte;
-      if (0x55 == serial_in_byte) {  // 0x55 - End of text
+      if (serial_in_byte_counter == 3) {
+        if ((0xA6 == serial_in_buffer[1]) || (0xAB == serial_in_buffer[1])) {  // AA A6 06 023908010155 55 - 06 is receive_len
+          receive_len = serial_in_buffer[2] + 4;  // Get at least receive_len bytes
+        }
+      }
+      if ((!receive_len && (0x55 == serial_in_byte)) || (receive_len && (serial_in_byte_counter == receive_len))) {  // 0x55 - End of text
         SonoffBridgeReceivedRaw();
         sonoff_bridge_receive_flag = 0;
         return 1;
@@ -351,6 +347,7 @@ boolean SonoffBridgeSerialInput()
     serial_in_byte_counter = 0;
     serial_in_byte = 0;
     sonoff_bridge_receive_flag = 1;
+    receive_len = 0;
   }
   return 0;
 }
@@ -542,12 +539,12 @@ boolean SonoffBridgeCommand()
           sonoff_bridge_receive_raw_flag = 1;
           break;
         case 192:  // 0xC0 - Beep
-          char beep[] = "AAC000C055";
-          SonoffBridgeSendRaw(beep, sizeof(beep));
+          char beep[] = "AAC000C055\0";
+          SerialSendRaw(beep);
           break;
         }
       } else {
-        SonoffBridgeSendRaw(XdrvMailbox.data, XdrvMailbox.data_len);
+        SerialSendRaw(RemoveSpace(XdrvMailbox.data));
         sonoff_bridge_receive_raw_flag = 1;
       }
     }
@@ -569,8 +566,6 @@ void SonoffBridgeInit()
  * Interface
 \*********************************************************************************************/
 
-#define XDRV_06
-
 boolean Xdrv06(byte function)
 {
   boolean result = false;
@@ -582,6 +577,9 @@ boolean Xdrv06(byte function)
         break;
       case FUNC_COMMAND:
         result = SonoffBridgeCommand();
+        break;
+      case FUNC_SERIAL:
+        result = SonoffBridgeSerialInput();
         break;
     }
   }

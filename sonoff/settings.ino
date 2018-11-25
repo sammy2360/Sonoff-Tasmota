@@ -86,20 +86,12 @@ void RtcSettingsSave()
     RtcSettings.valid = RTC_MEM_VALID;
     ESP.rtcUserMemoryWrite(100, (uint32_t*)&RtcSettings, sizeof(RTCMEM));
     rtc_settings_crc = GetRtcSettingsCrc();
-#ifdef DEBUG_THEO
-    AddLog_P(LOG_LEVEL_DEBUG, PSTR("Dump: Save"));
-    RtcSettingsDump();
-#endif  // DEBUG_THEO
   }
 }
 
 void RtcSettingsLoad()
 {
-  ESP.rtcUserMemoryRead(100, (uint32_t*)&RtcSettings, sizeof(RTCMEM));
-#ifdef DEBUG_THEO
-  AddLog_P(LOG_LEVEL_DEBUG, PSTR("Dump: Load"));
-  RtcSettingsDump();
-#endif  // DEBUG_THEO
+  ESP.rtcUserMemoryRead(100, (uint32_t*)&RtcSettings, sizeof(RTCMEM));  // 0x290
   if (RtcSettings.valid != RTC_MEM_VALID) {
     memset(&RtcSettings, 0, sizeof(RTCMEM));
     RtcSettings.valid = RTC_MEM_VALID;
@@ -107,6 +99,9 @@ void RtcSettingsLoad()
     RtcSettings.energy_kWhtotal = Settings.energy_kWhtotal;
     for (byte i = 0; i < MAX_COUNTERS; i++) {
       RtcSettings.pulse_counter[i] = Settings.pulse_counter[i];
+    }
+    for (byte i = 0; i < MAX_ENCODERS; i++) {
+      RtcSettings.encoder_counter[i] = Settings.encoder_counter[i];
     }
     RtcSettings.power = Settings.power;
     RtcSettingsSave();
@@ -117,6 +112,47 @@ void RtcSettingsLoad()
 boolean RtcSettingsValid()
 {
   return (RTC_MEM_VALID == RtcSettings.valid);
+}
+
+/********************************************************************************************/
+
+uint32_t rtc_reboot_crc = 0;
+
+uint32_t GetRtcRebootCrc()
+{
+  uint32_t crc = 0;
+  uint8_t *bytes = (uint8_t*)&RtcReboot;
+
+  for (uint16_t i = 0; i < sizeof(RTCRBT); i++) {
+    crc += bytes[i]*(i+1);
+  }
+  return crc;
+}
+
+void RtcRebootSave()
+{
+  if (GetRtcRebootCrc() != rtc_reboot_crc) {
+    RtcReboot.valid = RTC_MEM_VALID;
+    ESP.rtcUserMemoryWrite(100 - sizeof(RTCRBT), (uint32_t*)&RtcReboot, sizeof(RTCRBT));
+    rtc_reboot_crc = GetRtcRebootCrc();
+  }
+}
+
+void RtcRebootLoad()
+{
+  ESP.rtcUserMemoryRead(100 - sizeof(RTCRBT), (uint32_t*)&RtcReboot, sizeof(RTCRBT));  // 0x280
+  if (RtcReboot.valid != RTC_MEM_VALID) {
+    memset(&RtcReboot, 0, sizeof(RTCRBT));
+    RtcReboot.valid = RTC_MEM_VALID;
+//    RtcReboot.fast_reboot_count = 0;  // Explicit by memset
+    RtcRebootSave();
+  }
+  rtc_reboot_crc = GetRtcRebootCrc();
+}
+
+boolean RtcRebootValid()
+{
+  return (RTC_MEM_VALID == RtcReboot.valid);
 }
 
 /*********************************************************************************************\
@@ -286,8 +322,10 @@ void SettingsLoad()
   snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_CONFIG D_LOADED_FROM_FLASH_AT " %X, " D_COUNT " %d"), settings_location, Settings.save_flag);
   AddLog(LOG_LEVEL_DEBUG);
 
+#ifndef BE_MINIMAL
   if (bad_crc || (Settings.cfg_holder != (uint16_t)CFG_HOLDER)) { SettingsDefault(); }
   settings_crc = GetSettingsCrc();
+#endif  // BE_MINIMAL
 
   RtcSettingsLoad();
 }
@@ -456,8 +494,8 @@ void SettingsDefaultSet2()
   strlcpy(Settings.mqtt_user, MQTT_USER, sizeof(Settings.mqtt_user));
   strlcpy(Settings.mqtt_pwd, MQTT_PASS, sizeof(Settings.mqtt_pwd));
   strlcpy(Settings.mqtt_topic, MQTT_TOPIC, sizeof(Settings.mqtt_topic));
-  strlcpy(Settings.button_topic, "0", sizeof(Settings.button_topic));
-  strlcpy(Settings.switch_topic, "0", sizeof(Settings.switch_topic));
+  strlcpy(Settings.button_topic, MQTT_BUTTON_TOPIC, sizeof(Settings.button_topic));
+  strlcpy(Settings.switch_topic, MQTT_SWITCH_TOPIC, sizeof(Settings.switch_topic));
   strlcpy(Settings.mqtt_grptopic, MQTT_GRPTOPIC, sizeof(Settings.mqtt_grptopic));
   strlcpy(Settings.mqtt_fulltopic, MQTT_FULLTOPIC, sizeof(Settings.mqtt_fulltopic));
   Settings.mqtt_retry = MQTT_RETRY_SECS;
@@ -528,14 +566,15 @@ void SettingsDefaultSet2()
 
   // Sensor
   Settings.flag.temperature_conversion = TEMP_CONVERSION;
+  Settings.flag.pressure_conversion = PRESSURE_CONVERSION;
   Settings.flag2.pressure_resolution = PRESSURE_RESOLUTION;
   Settings.flag2.humidity_resolution = HUMIDITY_RESOLUTION;
   Settings.flag2.temperature_resolution = TEMP_RESOLUTION;
 //  Settings.altitude = 0;
 
   // Rules
-//  Settings.flag.rules_enabled = 0;
-//  Settings.flag.rules_once = 0;
+//  Settings.rule_enabled = 0;
+//  Settings.rule_once = 0;
 //  for (byte i = 1; i < MAX_RULE_SETS; i++) { Settings.rules[i][0] = '\0'; }
 
   // Home Assistant
@@ -572,7 +611,13 @@ void SettingsDefaultSet2()
   SettingsDefaultSet_5_10_1();   // Display settings
 
   // Time
-  Settings.timezone = APP_TIMEZONE;
+  if (((APP_TIMEZONE > -14) && (APP_TIMEZONE < 15)) || (99 == APP_TIMEZONE)) {
+    Settings.timezone = APP_TIMEZONE;
+    Settings.timezone_minutes = 0;
+  } else {
+    Settings.timezone = APP_TIMEZONE / 60;
+    Settings.timezone_minutes = abs(APP_TIMEZONE % 60);
+  }
   strlcpy(Settings.ntp_server[0], NTP_SERVER1, sizeof(Settings.ntp_server[0]));
   strlcpy(Settings.ntp_server[1], NTP_SERVER2, sizeof(Settings.ntp_server[1]));
   strlcpy(Settings.ntp_server[2], NTP_SERVER3, sizeof(Settings.ntp_server[2]));
@@ -586,6 +631,15 @@ void SettingsDefaultSet2()
   Settings.latitude = (int)((double)LATITUDE * 1000000);
   Settings.longitude = (int)((double)LONGITUDE * 1000000);
   SettingsDefaultSet_5_13_1c();  // Time STD/DST settings
+
+  Settings.button_debounce = KEY_DEBOUNCE_TIME;
+  Settings.switch_debounce = SWITCH_DEBOUNCE_TIME;
+
+  for (byte j = 0; j < 5; j++) {
+    Settings.rgbwwTable[j] = 255;
+  }
+
+  memset(&Settings.drivers, 0xFF, 32);  // Enable all possible monitors, displays, drivers and sensors
 }
 
 /********************************************************************************************/
@@ -615,7 +669,10 @@ void SettingsDefaultSet_5_10_1()
   Settings.display_rows = 2;
   Settings.display_cols[0] = 16;
   Settings.display_cols[1] = 8;
-//#if defined(USE_I2C) && defined(USE_DISPLAY)
+  Settings.display_dimmer = 1;
+  Settings.display_size = 1;
+  Settings.display_font = 1;
+  Settings.display_rotate = 0;
   Settings.display_address[0] = MTX_ADDRESS1;
   Settings.display_address[1] = MTX_ADDRESS2;
   Settings.display_address[2] = MTX_ADDRESS3;
@@ -624,9 +681,6 @@ void SettingsDefaultSet_5_10_1()
   Settings.display_address[5] = MTX_ADDRESS6;
   Settings.display_address[6] = MTX_ADDRESS7;
   Settings.display_address[7] = MTX_ADDRESS8;
-//#endif  // USE_DISPLAY
-  Settings.display_dimmer = 1;
-  Settings.display_size = 1;
 }
 
 void SettingsResetStd()
@@ -756,12 +810,49 @@ void SettingsDelta()
     }
     if (Settings.version < 0x050E0002) {
       for (byte i = 1; i < MAX_RULE_SETS; i++) { Settings.rules[i][0] = '\0'; }
-      Settings.rule_enabled = Settings.flag.rules_enabled;
-      Settings.rule_once = Settings.flag.rules_once;
+      Settings.rule_enabled = Settings.flag.mqtt_serial_raw;   // Was rules_enabled until 5.14.0b
+      Settings.rule_once = Settings.flag.pressure_conversion;  // Was rules_once until 5.14.0b
     }
     if (Settings.version < 0x06000000) {
       Settings.cfg_size = sizeof(SYSCFG);
       Settings.cfg_crc = GetSettingsCrc();
+    }
+    if (Settings.version < 0x06000002) {
+      for (byte i = 0; i < MAX_SWITCHES; i++) {
+        if (i < 4) {
+          Settings.switchmode[i] = Settings.ex_switchmode[i];
+        } else {
+          Settings.switchmode[i] = SWITCH_MODE;
+        }
+      }
+      for (byte i = 0; i < MAX_GPIO_PIN; i++) {
+        if (Settings.my_gp.io[i] >= GPIO_SWT5) {  // Move up from GPIO_SWT5 to GPIO_KEY1
+          Settings.my_gp.io[i] += 4;
+        }
+      }
+    }
+    if (Settings.version < 0x06000003) {
+      Settings.flag.mqtt_serial_raw = 0;      // Was rules_enabled until 5.14.0b
+      Settings.flag.pressure_conversion = 0;  // Was rules_once until 5.14.0b
+      Settings.flag3.data = 0;
+    }
+    if (Settings.version < 0x06010103) {
+      Settings.flag3.timers_enable = 1;
+    }
+    if (Settings.version < 0x0601010C) {
+      Settings.button_debounce = KEY_DEBOUNCE_TIME;
+      Settings.switch_debounce = SWITCH_DEBOUNCE_TIME;
+    }
+    if (Settings.version < 0x0602010A) {
+      for (byte j = 0; j < 5; j++) {
+        Settings.rgbwwTable[j] = 255;
+      }
+    }
+    if (Settings.version < 0x06030002) {
+      Settings.timezone_minutes = 0;
+    }
+    if (Settings.version < 0x06030004) {
+      memset(&Settings.drivers, 0xFF, 32);  // Enable all possible monitors, displays, drivers and sensors
     }
 
     Settings.version = VERSION;
