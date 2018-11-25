@@ -18,6 +18,10 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
+//#include <core_version.h>
+//#ifdef ARDUINO_ESP8266_RELEASE_2_3_0
+//#warning **** Tasmota is using v2.4.0 wiring_pwm.c as planned ****
+
 #include "wiring_private.h"
 #include "pins_arduino.h"
 #include "c_types.h"
@@ -80,7 +84,7 @@ uint32_t pwm_get_mask(uint16_t value)
     return mask;
 }
 
-void prep_pwm_steps()
+void prep_pwm_steps(void)
 {
     if(pwm_mask == 0) {
         return;
@@ -119,7 +123,7 @@ void prep_pwm_steps()
     pwm_steps_changed = 1;
 }
 
-void ICACHE_RAM_ATTR pwm_timer_isr() //103-138
+void ICACHE_RAM_ATTR pwm_timer_isr(void) //103-138
 {
     struct pwm_isr_table *table = &(_pwm_isr_data.tables[_pwm_isr_data.active]);
     static uint8_t current_step = 0;
@@ -156,7 +160,7 @@ void ICACHE_RAM_ATTR pwm_timer_isr() //103-138
     TEIE |= TEIE1;//13
 }
 
-void pwm_start_timer()
+void pwm_start_timer(void)
 {
     timer1_disable();
     ETS_FRC_TIMER1_INTR_ATTACH(NULL, NULL);
@@ -219,3 +223,5 @@ extern void __analogWriteRange(uint32_t range)
 extern void analogWrite(uint8_t pin, int val) __attribute__ ((weak, alias("__analogWrite")));
 extern void analogWriteFreq(uint32_t freq) __attribute__ ((weak, alias("__analogWriteFreq")));
 extern void analogWriteRange(uint32_t range) __attribute__ ((weak, alias("__analogWriteRange")));
+
+//#endif  // ARDUINO_ESP8266_RELEASE_2_3_0

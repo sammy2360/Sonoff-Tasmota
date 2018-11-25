@@ -21,6 +21,9 @@
 /*********************************************************************************************\
  * Serial Bridge using Software Serial library (TasmotaSerial)
 \*********************************************************************************************/
+
+#define XDRV_08                    8
+
 #define SERIAL_BRIDGE_BUFFER_SIZE  130
 
 #include <TasmotaSerial.h>
@@ -35,7 +38,7 @@ uint8_t serial_bridge_in_byte_counter = 0;
 unsigned long serial_bridge_polling_window = 0;
 char serial_bridge_buffer[SERIAL_BRIDGE_BUFFER_SIZE];
 
-void SerialBridgeInput()
+void SerialBridgeInput(void)
 {
   while (SerialBridgeSerial->available()) {
     yield();
@@ -84,7 +87,7 @@ void SerialBridgeInit(void)
  * Commands
 \*********************************************************************************************/
 
-boolean SerialBridgeCommand()
+boolean SerialBridgeCommand(void)
 {
   char command [CMDSZ];
   boolean serviced = true;
@@ -126,8 +129,6 @@ boolean SerialBridgeCommand()
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
-
-#define XDRV_08
 
 boolean Xdrv08(byte function)
 {

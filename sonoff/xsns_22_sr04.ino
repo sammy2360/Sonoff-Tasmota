@@ -25,8 +25,8 @@
  * References:
  * - https://www.dfrobot.com/wiki/index.php/Weather-proof_Ultrasonic_Sensor_SKU_:_SEN0207
 \*********************************************************************************************/
-#define max(a,b) ((a)>(b)?(a):(b))
-#define min(a,b) ((a)<(b)?(a):(b))
+
+#define XSNS_22             22
 
 uint8_t sr04_echo_pin = 0;
 uint8_t sr04_trig_pin = 0;
@@ -42,11 +42,11 @@ uint8_t sr04_trig_pin = 0;
 #define PING_OVERHEAD         5
 
 // Conversion from uS to distance (round result to nearest cm or inch).
-#define EchoConvert(echoTime, conversionFactor) (max(((unsigned int)echoTime + conversionFactor / 2) / conversionFactor, (echoTime ? 1 : 0)))
+#define EchoConvert(echoTime, conversionFactor) (tmax(((unsigned int)echoTime + conversionFactor / 2) / conversionFactor, (echoTime ? 1 : 0)))
 
 /********************************************************************************************/
 
-void Sr04Init()
+void Sr04Init(void)
 {
   sr04_echo_pin = pin[GPIO_SR04_ECHO];
   sr04_trig_pin = pin[GPIO_SR04_TRIG];
@@ -74,7 +74,7 @@ uint16_t Sr04Ping(uint16_t max_cm_distance)
   uint16_t duration = 0;
   uint16_t maxEchoTime;
 
-  maxEchoTime = min(max_cm_distance + 1, (uint16_t) MAX_SENSOR_DISTANCE + 1) * US_ROUNDTRIP_CM;
+  maxEchoTime = tmin(max_cm_distance + 1, (uint16_t) MAX_SENSOR_DISTANCE + 1) * US_ROUNDTRIP_CM;
 
   /* The following trigPin/echoPin cycle is used to determine the
      distance of the nearest object by bouncing soundwaves off of it. */
@@ -136,6 +136,11 @@ void Sr04Show(boolean json)
   if (Sr04Read(&distance)) {                // Check if read failed
     if(json) {
       snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("%s,\"SR04\":{\"" D_JSON_DISTANCE "\":%d}"), mqtt_data, distance);
+#ifdef USE_DOMOTICZ
+      if (0 == tele_period) {
+        DomoticzSensor(DZ_COUNT, distance);  // Send distance as Domoticz Counter value
+      }
+#endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
     } else {
       snprintf_P(mqtt_data, sizeof(mqtt_data), HTTP_SNS_DISTANCE, mqtt_data, distance);
@@ -147,8 +152,6 @@ void Sr04Show(boolean json)
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
-
-#define XSNS_22
 
 boolean Xsns22(byte function)
 {
