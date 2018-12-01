@@ -55,6 +55,7 @@ typedef unsigned long power_t;              // Power (Relay) type
 #define MAX_KEYS               4            // Max number of keys or buttons
 #define MAX_PWMS               5            // Max number of PWM channels
 #define MAX_COUNTERS           4            // Max number of counter sensors
+#define MAX_ENCODERS           4            // Max number of rotary encoders
 #define MAX_TIMERS             16           // Max number of Timers
 #define MAX_PULSETIMERS        8            // Max number of supported pulse timers
 #define MAX_FRIENDLYNAMES      4            // Max number of Friendly names

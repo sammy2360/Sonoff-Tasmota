@@ -301,6 +301,10 @@ struct SYSCFG {
   unsigned long pulse_counter[MAX_COUNTERS];  // 5C0
   uint16_t      pulse_counter_type;        // 5D0
   uint16_t      pulse_counter_debounce;    // 5D2
+  unsigned long encoder_counter[MAX_ENCODERS];
+  uint8_t       encoder_max_limit;
+  uint8_t       encoder_min_limit;
+  uint8_t       encoder_steps;
   uint8_t       rf_code[17][9];            // 5D4
   uint8_t       timezone_minutes;          // 66D
   uint16_t      switch_debounce;           // 66E
@@ -354,6 +358,7 @@ struct RTCMEM {
   unsigned long energy_kWhtoday;              // 294
   unsigned long energy_kWhtotal;              // 298
   unsigned long pulse_counter[MAX_COUNTERS];  // 29C
+  unsigned long encoder_counter[MAX_ENCODERS];
   power_t       power;                     // 2AC
   uint8_t       free_020[60];              // 2B0
                                            // 2EC - 2FF free locations

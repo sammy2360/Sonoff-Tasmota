@@ -85,6 +85,7 @@
 #define D_ECO2 "eCO2"
 #define D_EMULATION "Emulation"
 #define D_ENABLED "Enabled"
+#define D_ENCODER "Encoder"
 #define D_ERASE "Erase"
 #define D_ERROR "Error"
 #define D_FAHRENHEIT "Fahrenheit"

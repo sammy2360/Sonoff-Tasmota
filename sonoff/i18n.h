@@ -55,6 +55,7 @@
 #define D_JSON_DONE "Done"
 #define D_JSON_ECO2 "eCO2"
 #define D_JSON_EMPTY "Empty"
+#define D_JSON_ENCODER "Encoder"
 #define D_JSON_ENDDST "EndDST"           // End Daylight Savings Time
 #define D_JSON_ERASE "Erase"
 #define D_JSON_ERROR "Error"
@@ -204,6 +205,10 @@
 #define D_CMND_COUNTER "Counter"
 #define D_CMND_COUNTERTYPE "CounterType"
 #define D_CMND_COUNTERDEBOUNCE "CounterDebounce"
+#define D_CMND_ENCODER "Encoder"
+#define D_CMND_ENCODERMAX "EncoderMaxLimit"
+#define D_CMND_ENCODERMIN "EncoderMinLimit"
+#define D_CMND_ENCODERSTEPS "EncoderSteps"
 #define D_CMND_BUTTONDEBOUNCE "ButtonDebounce"
 #define D_CMND_SWITCHDEBOUNCE "SwitchDebounce"
 #define D_CMND_SLEEP "Sleep"

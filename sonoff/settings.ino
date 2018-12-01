@@ -100,6 +100,9 @@ void RtcSettingsLoad(void)
     for (byte i = 0; i < MAX_COUNTERS; i++) {
       RtcSettings.pulse_counter[i] = Settings.pulse_counter[i];
     }
+    for (byte i = 0; i < MAX_ENCODERS; i++) {
+      RtcSettings.encoder_counter[i] = Settings.encoder_counter[i];
+    }
     RtcSettings.power = Settings.power;
     RtcSettingsSave();
   }
