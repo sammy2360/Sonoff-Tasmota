@@ -27,7 +27,7 @@
  * I2C Address: 0x5A assumes ADDR connected to Gnd, Wake also must be grounded
 \*********************************************************************************************/
 
-#define XSNS_36             36
+#define XSNS_37             37
 
 #include "i2cEncoderLibV2.h"
 i2cEncoderLibV2 Encoder[4] = {
