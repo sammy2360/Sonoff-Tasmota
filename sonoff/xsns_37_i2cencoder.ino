@@ -93,6 +93,7 @@ for (int i = 0; i < NUMBER_OF_ENCODERS; i++) {
 
       if ( Encoder[i].readStatus(PUSHR)) {
           //  encoderButton();
+          ExecuteCommandPower(i, POWER_TOGGLE, SRC_IGNORE);
       }
 
       if ( Encoder[i].readStatus(PUSHP)) {
