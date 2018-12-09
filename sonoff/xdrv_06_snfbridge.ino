@@ -1,18 +1,14 @@
 /*
   xdrv_06_snfbridge.ino - sonoff RF bridge 433 support for Sonoff-Tasmota
-
   Copyright (C) 2018  Theo Arends and Erik Andrén Zachrisson (fw update)
-
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
-
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -20,6 +16,8 @@
 /*********************************************************************************************\
   Sonoff RF Bridge 433
 \*********************************************************************************************/
+
+#define XDRV_06                   6
 
 #define SFB_TIME_AVOID_DUPLICATE  2000  // Milliseconds
 
@@ -165,7 +163,7 @@ ssize_t rf_search_and_write(uint8_t *buf, size_t size)
   return 0;
 }
 
-uint8_t rf_erase_flash()
+uint8_t rf_erase_flash(void)
 {
   uint8_t err;
 
@@ -188,7 +186,7 @@ uint8_t rf_erase_flash()
   return 0;
 }
 
-uint8_t SnfBrUpdateInit()
+uint8_t SnfBrUpdateInit(void)
 {
   pinMode(PIN_C2CK, OUTPUT);
   pinMode(PIN_C2D, INPUT);
@@ -199,22 +197,7 @@ uint8_t SnfBrUpdateInit()
 
 /********************************************************************************************/
 
-void SonoffBridgeSendRaw(char *codes, int size)
-{
-  char *p;
-  char stemp[3];
-  uint8_t code;
-
-  while (size > 0) {
-    snprintf(stemp, sizeof(stemp), codes);
-    code = strtol(stemp, &p, 16);
-    Serial.write(code);
-    size -= 2;
-    codes += 2;
-  }
-}
-
-void SonoffBridgeReceivedRaw()
+void SonoffBridgeReceivedRaw(void)
 {
   // Decoding according to https://github.com/Portisch/RF-Bridge-EFM8BB1
   uint8_t buckets = 0;
@@ -238,20 +221,21 @@ void SonoffBridgeReceivedRaw()
 
 /********************************************************************************************/
 
-void SonoffBridgeLearnFailed()
+void SonoffBridgeLearnFailed(void)
 {
   sonoff_bridge_learn_active = 0;
   snprintf_P(mqtt_data, sizeof(mqtt_data), S_JSON_COMMAND_INDEX_SVALUE, D_CMND_RFKEY, sonoff_bridge_learn_key, D_JSON_LEARN_FAILED);
   MqttPublishPrefixTopic_P(RESULT_OR_STAT, PSTR(D_CMND_RFKEY));
 }
 
-void SonoffBridgeReceived()
+void SonoffBridgeReceived(void)
 {
   uint16_t sync_time = 0;
   uint16_t low_time = 0;
   uint16_t high_time = 0;
   uint32_t received_id = 0;
   char rfkey[8];
+  char stemp[16];
 
   AddLogSerial(LOG_LEVEL_DEBUG);
 
@@ -312,16 +296,23 @@ void SonoffBridgeReceived()
   }
 }
 
-boolean SonoffBridgeSerialInput()
+boolean SonoffBridgeSerialInput(void)
 {
   // iTead Rf Universal Transceiver Module Serial Protocol Version 1.0 (20170420)
+  static int8_t receive_len = 0;
+
   if (sonoff_bridge_receive_flag) {
     if (sonoff_bridge_receive_raw_flag) {
       if (!serial_in_byte_counter) {
         serial_in_buffer[serial_in_byte_counter++] = 0xAA;
       }
       serial_in_buffer[serial_in_byte_counter++] = serial_in_byte;
-      if (0x55 == serial_in_byte) {  // 0x55 - End of text
+      if (serial_in_byte_counter == 3) {
+        if ((0xA6 == serial_in_buffer[1]) || (0xAB == serial_in_buffer[1])) {  // AA A6 06 023908010155 55 - 06 is receive_len
+          receive_len = serial_in_buffer[2] + 4;  // Get at least receive_len bytes
+        }
+      }
+      if ((!receive_len && (0x55 == serial_in_byte)) || (receive_len && (serial_in_byte_counter == receive_len))) {  // 0x55 - End of text
         SonoffBridgeReceivedRaw();
         sonoff_bridge_receive_flag = 0;
         return 1;
@@ -352,6 +343,7 @@ boolean SonoffBridgeSerialInput()
     serial_in_byte_counter = 0;
     serial_in_byte = 0;
     sonoff_bridge_receive_flag = 1;
+    receive_len = 0;
   }
   return 0;
 }
@@ -363,7 +355,7 @@ void SonoffBridgeSendCommand(byte code)
   Serial.write(0x55);  // End of Text
 }
 
-void SonoffBridgeSendAck()
+void SonoffBridgeSendAck(void)
 {
   Serial.write(0xAA);  // Start of Text
   Serial.write(0xA0);  // Acknowledge
@@ -422,7 +414,7 @@ void SonoffBridgeLearn(uint8_t key)
  * Commands
 \*********************************************************************************************/
 
-boolean SonoffBridgeCommand()
+boolean SonoffBridgeCommand(void)
 {
   char command [CMDSZ];
   boolean serviced = true;
@@ -543,12 +535,12 @@ boolean SonoffBridgeCommand()
           sonoff_bridge_receive_raw_flag = 1;
           break;
         case 192:  // 0xC0 - Beep
-          char beep[] = "AAC000C055";
-          SonoffBridgeSendRaw(beep, sizeof(beep));
+          char beep[] = "AAC000C055\0";
+          SerialSendRaw(beep);
           break;
         }
       } else {
-        SonoffBridgeSendRaw(XdrvMailbox.data, XdrvMailbox.data_len);
+        SerialSendRaw(RemoveSpace(XdrvMailbox.data));
         sonoff_bridge_receive_raw_flag = 1;
       }
     }
@@ -560,7 +552,7 @@ boolean SonoffBridgeCommand()
 
 /*********************************************************************************************/
 
-void SonoffBridgeInit()
+void SonoffBridgeInit(void)
 {
   sonoff_bridge_receive_raw_flag = 0;
   SonoffBridgeSendCommand(0xA7);  // Stop reading RF signals enabling iTead default RF handling
@@ -569,8 +561,6 @@ void SonoffBridgeInit()
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
-
-#define XDRV_06
 
 boolean Xdrv06(byte function)
 {
@@ -583,6 +573,9 @@ boolean Xdrv06(byte function)
         break;
       case FUNC_COMMAND:
         result = SonoffBridgeCommand();
+        break;
+      case FUNC_SERIAL:
+        result = SonoffBridgeSerialInput();
         break;
     }
   }
