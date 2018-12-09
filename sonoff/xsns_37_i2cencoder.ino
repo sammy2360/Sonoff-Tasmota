@@ -24,7 +24,7 @@
  *
  * Source: https://github.com/Fattoresaimon/I2CEncoderV2
  *
- * I2C Address: 0x5A assumes ADDR connected to Gnd, Wake also must be grounded
+ * I2C Address: 0x01 assumes ADDR connected to Gnd, Wake also must be grounded
 \*********************************************************************************************/
 
 #define XSNS_37             37
