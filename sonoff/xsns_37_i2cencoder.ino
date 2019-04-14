@@ -160,7 +160,7 @@ for (int i = 0; i < NUMBER_OF_ENCODERS; i++) {
  * Interface
 \*********************************************************************************************/
 
-boolean Xsns36(byte function)
+boolean Xsns37(byte function)
 {
   boolean result = false;
 
